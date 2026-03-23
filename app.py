@@ -81,6 +81,7 @@ def classificar_cor(leitura_norm):
 
     r, g, b = estimar_rgb(leitura_norm)
     hex_estimado = f"#{r:02x}{g:02x}{b:02x}"
+    rgb_estimado = {"r": r, "g": g, "b": b}
 
     # Se não há calibração ou a confiança é muito baixa, tenta o Dicionário Universal
     if melhor_cor is None or confianca < 30:
@@ -98,7 +99,7 @@ def classificar_cor(leitura_norm):
         if menor_distancia is None:
             menor_distancia = 0
 
-    return melhor_cor, menor_distancia, confianca, hex_estimado
+    return melhor_cor, menor_distancia, confianca, hex_estimado, rgb_estimado
 
 @app.route("/")
 def index():
@@ -110,14 +111,18 @@ def api_cor():
         # 5 amostras com intervalo de 20ms tornam a resposta rápida (aprox. 0.1s de espera)
         leitura = sensor.ler_media(amostras=5, intervalo=0.02)
         leitura_norm = sensor.normalizar_rgb(leitura)
-        cor, distancia, confianca, hex_estimado = classificar_cor(leitura_norm)
+        cor, distancia, confianca, hex_estimado, rgb_estimado = classificar_cor(leitura_norm)
+
+        # Formata a leitura normalizada como uma string para fácil exibição no frontend
+        leitura_norm_str = f"rn={leitura_norm['rn']:.3f}, gn={leitura_norm['gn']:.3f}, bn={leitura_norm['bn']:.3f}"
 
         return jsonify({
             "cor": cor,
             "distancia": round(distancia, 4),
             "confianca": round(confianca, 2),
-            "leitura_norm": leitura_norm,
-            "hex_estimado": hex_estimado
+            "leitura_norm": leitura_norm_str,
+            "hex_estimado": hex_estimado,
+            "rgb_estimado": rgb_estimado
         })
     except Exception as e:
         app.logger.error(f"Erro na API /api/cor: {e}", exc_info=True)
@@ -127,8 +132,9 @@ def api_cor():
             "cor": "Erro de Leitura do Sensor",
             "distancia": 0,
             "confianca": 0,
-            "leitura_norm": {"rn": 0, "gn": 0, "bn": 0},
+            "leitura_norm": "rn=0.000, gn=0.000, bn=0.000",
             "hex_estimado": "#000000",
+            "rgb_estimado": {"r": 0, "g": 0, "b": 0},
             "error": str(e)
         })
 
