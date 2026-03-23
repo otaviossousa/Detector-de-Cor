@@ -3,7 +3,15 @@ from sensor_cor import SensorCor
 
 ARQUIVO = "cores_calibradas.json"
 
-sensor = SensorCor(integration_time=100, gain=4)
+try:
+    sensor = SensorCor(integration_time=100, gain=4)
+except Exception as e:
+    print("="*50)
+    print(f"ERRO FATAL: Não foi possível inicializar o sensor de cor.")
+    print(f"Verifique a conexão do hardware (pinos SCL, SDA, VCC, GND).")
+    print(f"Detalhes do erro: {e}")
+    print("="*50)
+    exit()
 
 try:
     # Carrega os dados existentes para não apagar o que já foi calibrado

@@ -4,17 +4,23 @@ from flask import Flask, jsonify, render_template
 from sensor_cor import SensorCor
 
 app = Flask(__name__)
-sensor = SensorCor(integration_time=100, gain=4)
+try:
+    sensor = SensorCor(integration_time=100, gain=4)
+except Exception as e:
+    print("="*50)
+    print(f"ERRO FATAL: Não foi possível inicializar o sensor de cor.")
+    print(f"Verifique a conexão do hardware (pinos SCL, SDA, VCC, GND).")
+    print(f"Detalhes do erro: {e}")
+    print("="*50)
+    exit()
 ARQUIVO = "cores_calibradas.json"
 
 def carregar_referencias():
     try:
         with open(ARQUIVO, "r", encoding="utf-8") as f:
             return json.load(f)
-    except FileNotFoundError:
+    except Exception:
         return {}
-
-referencias = carregar_referencias()
 
 # Dicionário Universal para adivinhar cores sem precisar de calibração
 CORES_UNIVERSAIS = {
@@ -43,10 +49,29 @@ def classificar_cor(leitura_norm):
     melhor_cor = None
     menor_distancia = None
 
-    if referencias:
+    referencias = carregar_referencias()
+
+    if isinstance(referencias, dict):
         for cor, dados in referencias.items():
-            ref = dados["norm"]
-            distancia = sensor.distancia(leitura_norm, ref)
+            if not isinstance(dados, dict):
+                continue
+
+            ref = dados.get("norm")
+            if not isinstance(ref, dict):
+                continue
+
+            try:
+                ref_seguro = {
+                    "rn": float(ref["rn"]),
+                    "gn": float(ref["gn"]),
+                    "bn": float(ref["bn"])
+                }
+                if math.isnan(ref_seguro["rn"]) or math.isnan(ref_seguro["gn"]) or math.isnan(ref_seguro["bn"]):
+                    continue
+            except (KeyError, ValueError, TypeError):
+                continue
+
+            distancia = sensor.distancia(leitura_norm, ref_seguro)
 
             if menor_distancia is None or distancia < menor_distancia:
                 menor_distancia = distancia
@@ -81,18 +106,31 @@ def index():
 
 @app.route("/api/cor")
 def api_cor():
-    # 5 amostras com intervalo de 20ms tornam a resposta rápida (aprox. 0.1s de espera)
-    leitura = sensor.ler_media(amostras=5, intervalo=0.02)
-    leitura_norm = sensor.normalizar_rgb(leitura)
-    cor, distancia, confianca, hex_estimado = classificar_cor(leitura_norm)
+    try:
+        # 5 amostras com intervalo de 20ms tornam a resposta rápida (aprox. 0.1s de espera)
+        leitura = sensor.ler_media(amostras=5, intervalo=0.02)
+        leitura_norm = sensor.normalizar_rgb(leitura)
+        cor, distancia, confianca, hex_estimado = classificar_cor(leitura_norm)
 
-    return jsonify({
-        "cor": cor,
-        "distancia": round(distancia, 4),
-        "confianca": round(confianca, 2),
-        "leitura_norm": leitura_norm,
-        "hex_estimado": hex_estimado
-    })
+        return jsonify({
+            "cor": cor,
+            "distancia": round(distancia, 4),
+            "confianca": round(confianca, 2),
+            "leitura_norm": leitura_norm,
+            "hex_estimado": hex_estimado
+        })
+    except Exception as e:
+        app.logger.error(f"Erro na API /api/cor: {e}", exc_info=True)
+        # Retorna uma estrutura JSON válida mesmo em caso de erro,
+        # para que a interface web não quebre.
+        return jsonify({
+            "cor": "Erro de Leitura do Sensor",
+            "distancia": 0,
+            "confianca": 0,
+            "leitura_norm": {"rn": 0, "gn": 0, "bn": 0},
+            "hex_estimado": "#000000",
+            "error": str(e)
+        })
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
