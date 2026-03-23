@@ -15,12 +15,14 @@ except Exception as e:
     exit()
 ARQUIVO = "cores_calibradas.json"
 
-def carregar_referencias():
-    try:
-        with open(ARQUIVO, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+# Carrega as referências uma vez na inicialização, para ser idêntico ao script de teste
+try:
+    with open(ARQUIVO, "r", encoding="utf-8") as f:
+        referencias = json.load(f)
+    print(f"Arquivo de calibração '{ARQUIVO}' carregado com sucesso.")
+except Exception as e:
+    print(f"AVISO: Não foi possível carregar '{ARQUIVO}'. Usando apenas cores universais. Erro: {e}")
+    referencias = {}
 
 # Dicionário Universal para adivinhar cores sem precisar de calibração
 CORES_UNIVERSAIS = {
@@ -48,8 +50,6 @@ def estimar_rgb(leitura_norm):
 def classificar_cor(leitura_norm):
     melhor_cor = None
     menor_distancia = None
-
-    referencias = carregar_referencias()
 
     if isinstance(referencias, dict):
         for cor, dados in referencias.items():
